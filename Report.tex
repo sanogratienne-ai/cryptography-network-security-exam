@@ -1,0 +1,129 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=blue,
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    backgroundcolor=\color{gray!10},
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray}
+}
+
+\title{\textbf{ULK POLYTECHNIC INSTITUTE}\\
+\large Assessment Technical Report: Cryptography and Network Security\\
+\small Module: ETTCS801 Cryptography and Network Security | Assessment: Integrated Situation}
+\author{\textbf{Student ID: 4202670026}\\ Lecturer: Isaac TUMWINE}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\hrule
+\vspace{0.5cm}
+
+\section{Introduction}
+A security assessment was conducted for ULK Polytechnic Institute following identified vulnerabilities, including weak staff passwords, outdated software, unencrypted inter-campus file transfers, guest network exposure to the central student records server, and suspicious external access attempts. This report outlines the risk assessment findings, python-based cryptographic controls implemented, network traffic filtering rules configured, and verification test results.
+
+\section{Risk Assessment and Recommended Controls}
+Three critical risks were identified, evaluated, and prioritized based on their likelihood and impact on organizational assets.
+
+\begin{table}[h!]
+\centering
+\small
+\begin{tabular}{p{3.2cm}p{3.8cm}p{4cm}c}
+\toprule
+\textbf{Asset} & \textbf{Vulnerability} & \textbf{Consequence} & \textbf{Risk Level} \\
+\midrule
+Central Records Server & Direct guest network exposure & Unauthorized internal access and data tampering & High \\
+Inter-campus Data Transfers & Unencrypted file transfers \& weak staff credentials & Interception via packet sniffing \& credential compromise & High \\
+External Interface & Unrestricted external access probes & Exploitation of outdated software via automated scans & Medium \\
+\bottomrule
+\end{tabular}
+\caption{Risk Assessment Summary Table}
+\label{tab:risk_matrix}
+\end{table}
+
+\subsection{Recommended Security Controls}
+\begin{enumerate}
+    \item \textbf{Subnet Isolation \& Traffic Filtering:} Enforce strict packet filtering (`iptables`) to block the guest subnet from reaching the records server.
+    \item \textbf{Cryptographic Protection:} Utilize symmetric encryption (AES via Fernet) for data at rest and in transit, decoupled from source code using environment variables.
+    \item \textbf{Access Control \& Policy Enforcement:} Mandate strong password policies and restrict management services (SSH) strictly to authorized staff IP ranges.
+\end{enumerate}
+
+\section{Encryption, Decryption, and Integrity Implementation}
+A custom Python security toolkit (`security_toolkit.py`) was developed to secure student records.
+
+\subsection{Cryptographic Mechanism}
+The tool leverages the `cryptography.fernet` library, implementing standard AES-128 in Cipher Block Chaining (CBC) mode with PKCS7 padding, combined with HMAC-SHA256 authentication. To maintain security best practices, encryption keys are maintained strictly outside source control and retrieved dynamically via the `APP_ENCRYPTION_KEY` environment variable.
+
+\subsection{Integrity Verification \& Error Handling}
+File integrity is validated using SHA-256 cryptographic hashing before encryption and following decryption. The application includes input validation and exception handling (`FileNotFoundError`, `InvalidToken`) ensuring that missing files, invalid inputs, or modified ciphertexts are detected gracefully without crashing execution.
+
+\subsection{Test Execution and Encryption Results}
+The script was executed using a sample student record dataset (`sample_students.csv`). The cryptographic toolkit completed file encryption, decryption, and hash integrity verification successfully, demonstrating complete accuracy and robust error handling.
+
+\begin{lstlisting}[caption={Cryptographic Toolkit Execution Output Log}]
+[*] Environment variable 'APP_ENCRYPTION_KEY' not found. Generating temporary session key...
+[+] Created sample input file: 'sample_students.csv'
+
+--- Step 1: Encrypting File ---
+[+] File successfully encrypted: 'sample_students.csv.enc'
+
+--- Step 2: Decrypting File ---
+[+] File successfully decrypted: 'sample_students_decrypted.csv'
+
+--- Step 3: Verifying File Integrity ---
+Original File SHA-256  : 2a38df4cdd406cfc81e6af3d1a691f91e08697ce497e1e21ed633007105f02ee
+Decrypted File SHA-256 : 2a38df4cdd406cfc81e6af3d1a691f91e08697ce497e1e21ed633007105f02ee
+[SUCCESS] Integrity Match: The file has not been altered.
+
+--- Step 4: Robustness & Error Testing ---
+[!] Decryption Error: Encrypted file 'non_existent_file.enc' not found.
+\end{lstlisting}
+
+As evidenced by the execution logs, the original and decrypted SHA-256 hashes matched identically (\texttt{2a38df4c...}), confirming zero bit corruption or payload modification. Furthermore, when provided with a missing file input, the application handled the error gracefully without crashing.
+
+\section{Network Traffic Filtering and Test Evidence}
+Traffic filtering rules were configured using `iptables` on the target records server (`192.168.10.100`) to isolate management services (SSH Port 22).
+
+\subsection{Firewall Rule Definitions}
+\begin{lstlisting}[caption={Applied IPTables Rules}]
+# Drop all guest network access to records server
+sudo iptables -A INPUT -s 192.168.20.0/24 -d 192.168.10.100 -j DROP
+
+# Permit authorized staff network access to SSH
+sudo iptables -A INPUT -p tcp -s 192.168.10.0/24 --dport 22 -d 192.168.10.100 -j ACCEPT
+
+# Block all other inbound access to SSH
+sudo iptables -A INPUT -p tcp --dport 22 -j DROP
+\end{lstlisting}
+
+\subsection{Test Procedures and Results}
+Network connectivity was verified using `netcat` (`nc`) across three scenarios:
+\begin{enumerate}
+    \item \textbf{Permitted Staff Connection:} Initiated from `192.168.10.15` $\rightarrow$ \textbf{Result:} Connection succeeded.
+    \item \textbf{Blocked Guest Connection:} Initiated from `192.168.20.50` $\rightarrow$ \textbf{Result:} Connection timed out (Dropped).
+    \item \textbf{Blocked External Connection:} Initiated from `198.51.100.44` $\rightarrow$ \textbf{Result:} Connection timed out (Dropped).
+\end{enumerate}
+
+\section{Conclusion}
+The security controls successfully mitigate the key risks identified during the security review. Sensitive student data is protected from unauthorized network exposure via firewall rules, and its confidentiality and integrity are ensured through robust cryptographic routines.
+
+\vspace{0.5cm}
+\noindent\textbf{GitHub Repository URL:} \url{https://github.com/sanogratienne-ai/cryptography-network-security-exam}
+
+\end{document}
